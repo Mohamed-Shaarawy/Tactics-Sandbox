@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows · MSVC · ASan
+            os: windows-latest
+            sanitize: address
+            cmake_args: ""
+          - name: Linux · Clang · ASan + UBSan
+            os: ubuntu-latest
+            sanitize: address,undefined
+            cmake_args: -DCMAKE_CXX_COMPILER=clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Puts the MSVC tools on PATH, including the ASan runtime DLL the tests need.
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -S TacticsCore -B build -DCMAKE_BUILD_TYPE=Debug -DTACTICS_SANITIZE=${{ matrix.sanitize }} ${{ matrix.cmake_args }}
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Debug --output-on-failure
